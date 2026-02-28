@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-userapi",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "n8n community nodes for UserApi.Ai endpoints",
   "license": "MIT",
   "homepage": "https://userapi.ai",
