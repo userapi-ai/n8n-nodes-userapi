@@ -1,0 +1,47 @@
+{
+  "name": "n8n-nodes-userapi",
+  "version": "0.1.8",
+  "description": "n8n community nodes for UserApi.Ai endpoints",
+  "license": "MIT",
+  "homepage": "https://userapi.ai",
+  "author": {
+    "name": "UserAPI",
+    "email": "nikita.zdr.mytest@gmail.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/userapi-ai/n8n-nodes-userapi.git"
+  },
+  "keywords": [
+    "n8n-community-node-package",
+    "n8n",
+    "userapi",
+    "midjourney"
+  ],
+  "files": [
+    "dist"
+  ],
+  "main": "dist/nodes/UserApi/UserApi.node.js",
+  "types": "dist/nodes/UserApi/UserApi.node.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/copy-assets.js",
+    "dev": "tsc -w -p tsconfig.json",
+    "lint": "echo \"Add ESLint config if needed\""
+  },
+  "peerDependencies": {
+    "n8n-workflow": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.4",
+    "typescript": "^5.7.3"
+  },
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "credentials": [
+      "dist/credentials/UserApi.credentials.js"
+    ],
+    "nodes": [
+      "dist/nodes/UserApi/UserApi.node.js"
+    ]
+  }
+}
