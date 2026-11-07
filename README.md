@@ -14,14 +14,14 @@ Official resources:
 ## Features
 
 - Supports all currently available UserApi.Ai methods in this node package.
-- ✨ [Imagine](https://userapi.ai/doc#imagine)
-- ⬆️ [Upscale](https://userapi.ai/doc#upscale)
-- 🔄 [Variation](https://userapi.ai/doc#variation)
-- 🔀 [Blend](https://userapi.ai/doc#blend)
-- 📝 [Describe](https://userapi.ai/doc#describe)
-- 🎬 [Animate](https://userapi.ai/doc#animate)
-- 🖌️ [Inpaint](https://userapi.ai/doc#inpaint)
-- And more: [See full docs](https://userapi.ai/doc)
+- ✨ [Imagine](https://userapi.ai/docs#imagine)
+- ⬆️ [Upscale](https://userapi.ai/docs#upscale)
+- 🔄 [Variation](https://userapi.ai/docs#variation)
+- 🔀 [Blend](https://userapi.ai/docs#blend)
+- 📝 [Describe](https://userapi.ai/docs#describe)
+- 🎬 [Animate](https://userapi.ai/docs#animate)
+- 🖌️ [Inpaint](https://userapi.ai/docs#inpaint)
+- And more: [See full docs](https://userapi.ai/docs)
 
 ## Installation
 
