@@ -8,6 +8,7 @@ import type {
 export class UserApi implements ICredentialType {
     name = 'userApi';
     displayName = 'UserAPI';
+    icon = 'file:userapi.svg' as const;
     documentationUrl = 'https://userapi.ai/first-steps';
 
     authenticate: IAuthenticateGeneric = {

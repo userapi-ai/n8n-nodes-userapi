@@ -7,7 +7,7 @@ import type {
 	INodeType,
 	INodeTypeDescription,
 } from 'n8n-workflow';
-import { NodeApiError } from 'n8n-workflow';
+import { NodeApiError, NodeConnectionTypes } from 'n8n-workflow';
 
 const webhookTypeOptions = [
 	{ name: 'Progress', value: 'progress' },
@@ -16,26 +16,26 @@ const webhookTypeOptions = [
 const API_BASE_URL = 'https://api.userapi.ai';
 
 const operationOptions = [
-	{ name: 'Imagine', value: 'imagine', description: 'POST /midjourney/v2/imagine' },
-	{ name: 'Imagine Instant', value: 'imagineInstant', description: 'POST /midjourney/v2/imagine-instant' },
-	{ name: 'Describe', value: 'describe', description: 'POST /midjourney/v2/describe' },
-	{ name: 'Info', value: 'info', description: 'POST /midjourney/v2/info' },
-	{ name: 'Upscale', value: 'upscale', description: 'POST /midjourney/v2/upscale' },
-	{ name: 'Pan', value: 'pan', description: 'POST /midjourney/v2/pan' },
-	{ name: 'Variation', value: 'variation', description: 'POST /midjourney/v2/variation' },
-	{ name: 'Vary Subtle', value: 'varySubtle', description: 'POST /midjourney/v2/vary-subtle' },
-	{ name: 'Vary Strong', value: 'varyStrong', description: 'POST /midjourney/v2/vary-strong' },
-	{ name: 'Reroll', value: 'reroll', description: 'POST /midjourney/v2/reroll' },
-	{ name: 'Upsample', value: 'upsample', description: 'POST /midjourney/v2/upsample' },
-	{ name: 'Animate', value: 'animate', description: 'POST /midjourney/v2/animate' },
-	{ name: 'Inpaint', value: 'inpaint', description: 'POST /midjourney/v2/inpaint' },
-	{ name: 'Zoom', value: 'zoom', description: 'POST /midjourney/v2/zoom' },
-	{ name: 'Blend', value: 'blend', description: 'POST /midjourney/v2/blend' },
-	{ name: 'Toggle Remix Mode', value: 'prefer', description: 'POST /midjourney/v2/prefer' },
-	{ name: 'Speed', value: 'speed', description: 'POST /midjourney/v2/speed' },
-	{ name: 'Upload', value: 'upload', description: 'POST /midjourney/v2/upload' },
-	{ name: 'Seed', value: 'seed', description: 'POST /midjourney/v2/seed' },
-	{ name: 'Status', value: 'status', description: 'GET /midjourney/v2/status?hash=...' },
+	{ name: 'Imagine', value: 'imagine', description: 'Generate four images from a text prompt' },
+	{ name: 'Imagine Instant', value: 'imagineInstant', description: 'Generate images from a prompt and pick the result in one call' },
+	{ name: 'Describe', value: 'describe', description: 'Get prompt suggestions that describe an image' },
+	{ name: 'Info', value: 'info', description: 'Get the subscription and usage details of a Midjourney account' },
+	{ name: 'Upscale', value: 'upscale', description: 'Upscale one image from a grid' },
+	{ name: 'Pan', value: 'pan', description: 'Extend an image in one direction' },
+	{ name: 'Variation', value: 'variation', description: 'Create variations of one image from a grid' },
+	{ name: 'Vary Subtle', value: 'varySubtle', description: 'Create subtle variations of an upscaled image' },
+	{ name: 'Vary Strong', value: 'varyStrong', description: 'Create strong variations of an upscaled image' },
+	{ name: 'Reroll', value: 'reroll', description: 'Run the same prompt again' },
+	{ name: 'Upsample', value: 'upsample', description: 'Upscale an image with a chosen upscaler' },
+	{ name: 'Animate', value: 'animate', description: 'Turn an image into a short video' },
+	{ name: 'Inpaint', value: 'inpaint', description: 'Redraw a masked region of an image' },
+	{ name: 'Zoom', value: 'zoom', description: 'Zoom out of an image' },
+	{ name: 'Blend', value: 'blend', description: 'Blend 2 to 5 images into one' },
+	{ name: 'Toggle Remix Mode', value: 'prefer', description: 'Turn Remix mode on or off for an account' },
+	{ name: 'Speed', value: 'speed', description: 'Switch an account between Relax, Fast and Turbo modes' },
+	{ name: 'Upload', value: 'upload', description: 'Upload an image to get a Midjourney link for it' },
+	{ name: 'Seed', value: 'seed', description: 'Get the seed of a generation' },
+	{ name: 'Status', value: 'status', description: 'Get the status and result of a task' },
 ];
 
 function withDisplay(operation: string, properties: INodeProperties[]): INodeProperties[] {
@@ -86,8 +86,8 @@ export class UserApi implements INodeType {
 		subtitle: '={{$parameter["operation"]}}',
 		description: 'UserApi.Ai - API layer to Midjourney (unofficial)',
 		defaults: { name: 'UserAPI' },
-		inputs: ['main'],
-		outputs: ['main'],
+		inputs: [NodeConnectionTypes.Main],
+		outputs: [NodeConnectionTypes.Main],
 		credentials: [{ name: 'userApi', required: true }],
 		properties: [
 			{ displayName: 'Operation', name: 'operation', type: 'options', noDataExpression: true, default: 'imagine', options: operationOptions },
@@ -102,7 +102,7 @@ export class UserApi implements INodeType {
 					default: '',
 					description: optionalAccountHashDescription,
 				},
-				{ displayName: 'Disable Prefilter', name: 'is_disable_prefilter', type: 'boolean', default: false },
+				{ displayName: 'Disable Prefilter', name: 'is_disable_prefilter', type: 'boolean', default: false, description: 'Whether to skip the prompt check that runs before the prompt is sent to Midjourney' },
 			]),
 			...withDisplay('imagineInstant', [
 				{ displayName: 'Prompt', name: 'prompt', type: 'string', required: true, default: '', description: 'Required prompt text' },
@@ -194,7 +194,7 @@ export class UserApi implements INodeType {
 				{ displayName: 'Account Hash', name: 'account_hash', type: 'string', required: true, default: '', description: requiredAccountHashDescription },
 				{ displayName: 'Webhook URL', name: 'webhook_url', type: 'string', default: '' },
 				{ displayName: 'Callback ID', name: 'callback_id', type: 'string', default: '', description: 'Optional callback identifier (max 72 chars)' },
-				{ displayName: 'Is Async', name: 'is_async', type: 'boolean', default: false, description: 'On: return hash immediately. Off: wait for final result.' },
+				{ displayName: 'Is Async', name: 'is_async', type: 'boolean', default: false, description: 'Whether to return the task hash at once instead of waiting for the final result' },
 			]),
 			...withDisplay('speed', [
 				{ displayName: 'Account Hash', name: 'account_hash', type: 'string', required: true, default: '', description: requiredAccountHashDescription },
@@ -205,15 +205,15 @@ export class UserApi implements INodeType {
 					required: true,
 					default: 'relax',
 					options: [
-						{ name: 'relax', value: 'relax' },
-						{ name: 'fast', value: 'fast' },
-						{ name: 'turbo', value: 'turbo' },
+						{ name: 'Relax', value: 'relax' },
+						{ name: 'Fast', value: 'fast' },
+						{ name: 'Turbo', value: 'turbo' },
 					],
 					description: 'Speed mode',
 				},
 				{ displayName: 'Webhook URL', name: 'webhook_url', type: 'string', default: '' },
 				{ displayName: 'Callback ID', name: 'callback_id', type: 'string', default: '', description: 'Optional callback identifier (max 72 chars)' },
-				{ displayName: 'Is Async', name: 'is_async', type: 'boolean', default: false, description: 'On: return hash immediately. Off: wait for final result.' },
+				{ displayName: 'Is Async', name: 'is_async', type: 'boolean', default: false, description: 'Whether to return the task hash at once instead of waiting for the final result' },
 			]),
 			...withDisplay('upload', [
 				{
@@ -227,7 +227,7 @@ export class UserApi implements INodeType {
 			]),
 			...withDisplay('seed', [
 				uuidHashField,
-				{ displayName: 'Is Async', name: 'is_async', type: 'boolean', default: false, description: 'On: return hash immediately. Off: wait for final result.' },
+				{ displayName: 'Is Async', name: 'is_async', type: 'boolean', default: false, description: 'Whether to return the task hash at once instead of waiting for the final result' },
 				{ displayName: 'Webhook URL', name: 'webhook_url', type: 'string', default: '' },
 				{ displayName: 'Callback ID', name: 'callback_id', type: 'string', default: '', description: 'Optional callback identifier (max 72 chars)' },
 			]),

@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-userapi",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "n8n community nodes for UserApi.Ai endpoints",
   "license": "MIT",
   "homepage": "https://userapi.ai",
@@ -33,6 +33,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.13.4",
+    "n8n-workflow": "^1.120.9",
     "typescript": "^5.7.3"
   },
   "n8n": {
