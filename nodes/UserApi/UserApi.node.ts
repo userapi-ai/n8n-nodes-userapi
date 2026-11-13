@@ -1,237 +1,365 @@
 import type {
 	IDataObject,
 	IExecuteFunctions,
+	IHttpRequestMethods,
 	IHttpRequestOptions,
 	INodeExecutionData,
 	INodeProperties,
 	INodeType,
 	INodeTypeDescription,
+	JsonObject,
 } from 'n8n-workflow';
-import { NodeApiError, NodeConnectionTypes } from 'n8n-workflow';
+import { NodeApiError, NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 
-const webhookTypeOptions = [
-	{ name: 'Progress', value: 'progress' },
-	{ name: 'Result', value: 'result' },
-];
 const API_BASE_URL = 'https://api.userapi.ai';
 
 const operationOptions = [
-	{ name: 'Imagine', value: 'imagine', description: 'Generate four images from a text prompt' },
-	{ name: 'Imagine Instant', value: 'imagineInstant', description: 'Generate images from a prompt and pick the result in one call' },
-	{ name: 'Describe', value: 'describe', description: 'Get prompt suggestions that describe an image' },
-	{ name: 'Info', value: 'info', description: 'Get the subscription and usage details of a Midjourney account' },
-	{ name: 'Upscale', value: 'upscale', description: 'Upscale one image from a grid' },
-	{ name: 'Pan', value: 'pan', description: 'Extend an image in one direction' },
-	{ name: 'Variation', value: 'variation', description: 'Create variations of one image from a grid' },
-	{ name: 'Vary Subtle', value: 'varySubtle', description: 'Create subtle variations of an upscaled image' },
-	{ name: 'Vary Strong', value: 'varyStrong', description: 'Create strong variations of an upscaled image' },
-	{ name: 'Reroll', value: 'reroll', description: 'Run the same prompt again' },
-	{ name: 'Upsample', value: 'upsample', description: 'Upscale an image with a chosen upscaler' },
-	{ name: 'Animate', value: 'animate', description: 'Turn an image into a short video' },
-	{ name: 'Inpaint', value: 'inpaint', description: 'Redraw a masked region of an image' },
-	{ name: 'Zoom', value: 'zoom', description: 'Zoom out of an image' },
-	{ name: 'Blend', value: 'blend', description: 'Blend 2 to 5 images into one' },
-	{ name: 'Toggle Remix Mode', value: 'prefer', description: 'Turn Remix mode on or off for an account' },
-	{ name: 'Speed', value: 'speed', description: 'Switch an account between Relax, Fast and Turbo modes' },
-	{ name: 'Upload', value: 'upload', description: 'Upload an image to get a Midjourney link for it' },
-	{ name: 'Seed', value: 'seed', description: 'Get the seed of a generation' },
-	{ name: 'Status', value: 'status', description: 'Get the status and result of a task' },
+	{ name: 'Animate', value: 'animate', description: 'Turn an image into a short video', action: 'Animate an image' },
+	{ name: 'Blend', value: 'blend', description: 'Blend 2 to 5 images into one', action: 'Blend images' },
+	{ name: 'Describe', value: 'describe', description: 'Get prompt suggestions that describe an image', action: 'Describe an image' },
+	{ name: 'Imagine', value: 'imagine', description: 'Generate four images from a text prompt', action: 'Generate images from a prompt' },
+	{ name: 'Imagine Instant', value: 'imagineInstant', description: 'Generate images from a prompt and pick the result in one call', action: 'Generate and pick an image' },
+	{ name: 'Info', value: 'info', description: 'Get the subscription and usage details of a Midjourney account', action: 'Get account info' },
+	{ name: 'Inpaint', value: 'inpaint', description: 'Redraw a masked region of an image', action: 'Inpaint an image' },
+	{ name: 'Pan', value: 'pan', description: 'Extend an image in one direction', action: 'Pan an image' },
+	{ name: 'Reroll', value: 'reroll', description: 'Run the same prompt again', action: 'Reroll a prompt' },
+	{ name: 'Seed', value: 'seed', description: 'Get the seed of a generation', action: 'Get the seed of a generation' },
+	{ name: 'Speed', value: 'speed', description: 'Switch an account between Relax, Fast and Turbo modes', action: 'Set account speed' },
+	{ name: 'Status', value: 'status', description: 'Get the status and result of a task', action: 'Get task status' },
+	{ name: 'Toggle Remix Mode', value: 'prefer', description: 'Turn Remix mode on or off for an account', action: 'Toggle remix mode' },
+	{ name: 'Upload', value: 'upload', description: 'Upload an image to get a Midjourney link for it', action: 'Upload an image' },
+	{ name: 'Upsample', value: 'upsample', description: 'Upscale an image with a chosen upscaler', action: 'Upsample an image' },
+	{ name: 'Upscale', value: 'upscale', description: 'Upscale one image from a grid', action: 'Upscale an image' },
+	{ name: 'Variation', value: 'variation', description: 'Create variations of one image from a grid', action: 'Create variations' },
+	{ name: 'Vary Strong', value: 'varyStrong', description: 'Create strong variations of an upscaled image', action: 'Create strong variations' },
+	{ name: 'Vary Subtle', value: 'varySubtle', description: 'Create subtle variations of an upscaled image', action: 'Create subtle variations' },
+	{ name: 'Zoom', value: 'zoom', description: 'Zoom out of an image', action: 'Zoom out of an image' },
 ];
 
-function withDisplay(operation: string, properties: INodeProperties[]): INodeProperties[] {
-	return properties.map((p) => ({
-		...p,
-		displayOptions: {
-			show: {
-				...(p.displayOptions?.show ?? {}),
-				operation: [operation],
-			},
-		},
-	}));
-}
-
-const commonWebhookFields: INodeProperties[] = [
-	{ displayName: 'Webhook URL', name: 'webhook_url', type: 'string', default: '', description: 'Optional callback URL' },
-	{
-		displayName: 'Webhook Type',
-		name: 'webhook_type',
-		type: 'options',
-		default: 'result',
-		description: 'Allowed values: progress, result',
-		options: webhookTypeOptions,
-	},
-];
-
-const uuidHashField: INodeProperties = {
-	displayName: 'Hash',
-	name: 'hash',
-	type: 'string',
-	required: true,
-	default: '',
-	description: 'Required UUID hash',
+// Request path of each operation. Every operation is a POST except Status.
+const operationPaths: Record<string, string> = {
+	animate: '/midjourney/v2/animate',
+	blend: '/midjourney/v2/blend',
+	describe: '/midjourney/v2/describe',
+	imagine: '/midjourney/v2/imagine',
+	imagineInstant: '/midjourney/v2/imagine-instant',
+	info: '/midjourney/v2/info',
+	inpaint: '/midjourney/v2/inpaint',
+	pan: '/midjourney/v2/pan',
+	prefer: '/midjourney/v2/prefer',
+	reroll: '/midjourney/v2/reroll',
+	seed: '/midjourney/v2/seed',
+	speed: '/midjourney/v2/speed',
+	status: '/midjourney/v2/status',
+	upload: '/midjourney/v2/upload',
+	upsample: '/midjourney/v2/upsample',
+	upscale: '/midjourney/v2/upscale',
+	variation: '/midjourney/v2/variation',
+	varyStrong: '/midjourney/v2/vary-strong',
+	varySubtle: '/midjourney/v2/vary-subtle',
+	zoom: '/midjourney/v2/zoom',
 };
 
-const optionalAccountHashDescription =
-	'Optional Discord account hash. If omitted, available accounts are rotated to distribute load.';
-const requiredAccountHashDescription =
-	'Required Discord account hash from your UserAPI dashboard.';
+// Operations that take the hash of an earlier task.
+const hashOperations = ['animate', 'inpaint', 'pan', 'reroll', 'seed', 'status', 'upsample', 'upscale', 'variation', 'varyStrong', 'varySubtle', 'zoom'];
+
+function show(operations: string[], extra: IDataObject = {}): INodeProperties['displayOptions'] {
+	return { show: { operation: operations, ...extra } };
+}
+
+// ---------------------------------------------------------------- optional fields
+
+const accountHashField: INodeProperties = {
+	displayName: 'Account Hash',
+	name: 'account_hash',
+	type: 'string',
+	default: '',
+	description: 'Discord account to run the task on. If empty, the accounts linked to your API key take turns.',
+};
+const callbackIdField: INodeProperties = {
+	displayName: 'Callback ID',
+	name: 'callback_id',
+	type: 'string',
+	default: '',
+	description: 'Your own identifier, returned with the task (up to 72 characters)',
+};
+const isAsyncField: INodeProperties = {
+	displayName: 'Is Async',
+	name: 'is_async',
+	type: 'boolean',
+	default: false,
+	description: 'Whether to return the task hash at once instead of waiting for the final result',
+};
+const prefilterField: INodeProperties = {
+	displayName: 'Disable Prefilter',
+	name: 'is_disable_prefilter',
+	type: 'boolean',
+	default: false,
+	description: 'Whether to skip the prompt check that runs before the prompt is sent to Midjourney',
+};
+const remixPromptField: INodeProperties = {
+	displayName: 'Prompt',
+	name: 'prompt',
+	type: 'string',
+	default: '',
+	description: 'New prompt for the result. Used when Remix mode is on.',
+};
+const webhookTypeField: INodeProperties = {
+	displayName: 'Webhook Type',
+	name: 'webhook_type',
+	type: 'options',
+	default: 'result',
+	description: 'Which updates are sent to the webhook',
+	options: [
+		{ name: 'Progress', value: 'progress', description: 'Every progress update and the result' },
+		{ name: 'Result', value: 'result', description: 'Only the final result' },
+	],
+};
+const webhookUrlField: INodeProperties = {
+	displayName: 'Webhook URL',
+	name: 'webhook_url',
+	type: 'string',
+	default: '',
+	description: 'URL that receives the task result as a POST request',
+};
+
+const byName = (a: INodeProperties, b: INodeProperties) => a.displayName.localeCompare(b.displayName);
+
+function additionalFields(operations: string[], fields: INodeProperties[]): INodeProperties {
+	return {
+		displayName: 'Additional Fields',
+		name: 'additionalFields',
+		type: 'collection',
+		placeholder: 'Add Field',
+		default: {},
+		displayOptions: show(operations),
+		options: [...fields].sort(byName),
+	};
+}
+
+const webhook = [webhookUrlField, webhookTypeField];
+
+const choiceOneToFour = [
+	{ name: '1', value: 1 },
+	{ name: '2', value: 2 },
+	{ name: '3', value: 3 },
+	{ name: '4', value: 4 },
+];
+
+// ---------------------------------------------------------------- node
 
 export class UserApi implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'UserAPI',
 		name: 'userApi',
-		icon: 'file:userapi.svg',
+		icon: { light: 'file:userapi.svg', dark: 'file:userapi.dark.svg' },
 		group: ['transform'],
 		version: 1,
 		subtitle: '={{$parameter["operation"]}}',
-		description: 'UserApi.Ai - API layer to Midjourney (unofficial)',
+		description: 'Generate Midjourney images and videos through the UserAPI.ai REST API',
 		defaults: { name: 'UserAPI' },
+		usableAsTool: true,
 		inputs: [NodeConnectionTypes.Main],
 		outputs: [NodeConnectionTypes.Main],
 		credentials: [{ name: 'userApi', required: true }],
 		properties: [
-			{ displayName: 'Operation', name: 'operation', type: 'options', noDataExpression: true, default: 'imagine', options: operationOptions },
-			...withDisplay('imagine', [
-				{ displayName: 'Prompt', name: 'prompt', type: 'string', required: true, default: '', description: 'Required prompt text' },
-				...commonWebhookFields,
-				{ displayName: 'Callback ID', name: 'callback_id', type: 'string', default: '', description: 'Optional callback identifier (max 72 chars)' },
-				{
-					displayName: 'Account Hash',
-					name: 'account_hash',
-					type: 'string',
-					default: '',
-					description: optionalAccountHashDescription,
-				},
-				{ displayName: 'Disable Prefilter', name: 'is_disable_prefilter', type: 'boolean', default: false, description: 'Whether to skip the prompt check that runs before the prompt is sent to Midjourney' },
-			]),
-			...withDisplay('imagineInstant', [
-				{ displayName: 'Prompt', name: 'prompt', type: 'string', required: true, default: '', description: 'Required prompt text' },
-				{
-					displayName: 'Choice', name: 'choice', type: 'options', required: true, default: 'nothing',
-					options: [{ name: 'Nothing', value: 'nothing' }, { name: 'Random', value: 'random' }, { name: 'All (Seed)', value: 'all' }, { name: '1', value: '1' }, { name: '2', value: '2' }, { name: '3', value: '3' }, { name: '4', value: '4' }],
-				},
-				{ displayName: 'Account Hash', name: 'account_hash', type: 'string', default: '', description: optionalAccountHashDescription },
-			]),
-			...withDisplay('describe', [
-				{ displayName: 'URL', name: 'url', type: 'string', required: true, default: '', description: 'Required image URL (http/https)' },
-				...commonWebhookFields,
-				{ displayName: 'Account Hash', name: 'account_hash', type: 'string', default: '', description: optionalAccountHashDescription },
-			]),
-			...withDisplay('info', [
-				{ displayName: 'Account Hash', name: 'account_hash', type: 'string', required: true, default: '', description: requiredAccountHashDescription },
-				{ displayName: 'Webhook URL', name: 'webhook_url', type: 'string', default: '' },
-				{ displayName: 'Callback ID', name: 'callback_id', type: 'string', default: '', description: 'Optional callback identifier (max 72 chars)' },
-			]),
-			...withDisplay('upscale', [
-				uuidHashField,
-				{
-					displayName: 'Choice',
-					name: 'choice',
-					type: 'options',
-					required: true,
-					default: 1,
-					options: [{ name: '1', value: 1 }, { name: '2', value: 2 }, { name: '3', value: 3 }, { name: '4', value: 4 }],
-				},
-				...commonWebhookFields,
-			]),
-			...withDisplay('pan', [
-				uuidHashField,
-				{ displayName: 'Direction', name: 'choice', type: 'options', required: true, default: 'right', options: [{ name: 'Right', value: 'right' }, { name: 'Left', value: 'left' }, { name: 'Up', value: 'up' }, { name: 'Down', value: 'down' }] },
-				{ displayName: 'Prompt', name: 'prompt', type: 'string', default: '', description: 'Optional. Used in Remix mode.' },
-				...commonWebhookFields,
-			]),
-			...withDisplay('variation', [
-				uuidHashField,
-				{
-					displayName: 'Choice',
-					name: 'choice',
-					type: 'options',
-					required: true,
-					default: 1,
-					options: [{ name: '1', value: 1 }, { name: '2', value: 2 }, { name: '3', value: 3 }, { name: '4', value: 4 }],
-				},
-				{ displayName: 'Prompt', name: 'prompt', type: 'string', default: '', description: 'Optional. Used in Remix mode.' },
-				...commonWebhookFields,
-			]),
-			...withDisplay('varySubtle', [uuidHashField, { displayName: 'Prompt', name: 'prompt', type: 'string', default: '', description: 'Optional. Used in Remix mode.' }, ...commonWebhookFields]),
-			...withDisplay('varyStrong', [uuidHashField, { displayName: 'Prompt', name: 'prompt', type: 'string', default: '', description: 'Optional. Used in Remix mode.' }, ...commonWebhookFields]),
-			...withDisplay('reroll', [uuidHashField, { displayName: 'Prompt', name: 'prompt', type: 'string', default: '', description: 'Optional. Used in Remix mode.' }, ...commonWebhookFields]),
-			...withDisplay('upsample', [
-				uuidHashField,
-				{
-					displayName: 'Choice', name: 'choice', type: 'options', required: true, default: 'v6_2x_subtle',
-					options: [{ name: 'v6_2x_subtle', value: 'v6_2x_subtle' }, { name: 'v6_2x_creative', value: 'v6_2x_creative' }, { name: 'v6r1_2x_subtle', value: 'v6r1_2x_subtle' }, { name: 'v6r1_2x_creative', value: 'v6r1_2x_creative' }, { name: 'v5_2x', value: 'v5_2x' }, { name: 'v5_4x', value: 'v5_4x' }, { name: 'v7_2x_subtle', value: 'v7_2x_subtle' }, { name: 'v7_2x_creative', value: 'v7_2x_creative' }],
-				},
-				...commonWebhookFields,
-			]),
-			...withDisplay('animate', [
-				uuidHashField,
-				{ displayName: 'Choice', name: 'choice', type: 'options', required: true, default: 'high', options: [{ name: 'High', value: 'high' }, { name: 'Low', value: 'low' }] },
-				...commonWebhookFields,
-			]),
-			...withDisplay('inpaint', [uuidHashField, { displayName: 'Mask (Base64)', name: 'mask', type: 'string', required: true, default: '' }, { displayName: 'Prompt', name: 'prompt', type: 'string', required: true, default: '' }, ...commonWebhookFields]),
-			...withDisplay('zoom', [
-				uuidHashField,
-				{ displayName: 'Zoom Mode', name: 'zoom_mode', type: 'options', default: 'choice', options: [{ name: 'By Choice', value: 'choice' }, { name: 'By Prompt', value: 'prompt' }] },
-				{ displayName: 'Choice', name: 'choice', type: 'options', required: true, default: 50, options: [{ name: '50', value: 50 }, { name: '75', value: 75 }], displayOptions: { show: { operation: ['zoom'], zoom_mode: ['choice'] } } },
-				{ displayName: 'Prompt', name: 'prompt', type: 'string', required: true, default: '', displayOptions: { show: { operation: ['zoom'], zoom_mode: ['prompt'] } } },
-				...commonWebhookFields,
-			]),
-			...withDisplay('blend', [
-				{
-					displayName: 'URLs',
-					name: 'urls',
-					type: 'fixedCollection',
-					typeOptions: { multipleValues: true },
-					default: { values: [{ url: '' }, { url: '' }] },
-					options: [{ displayName: 'URL Entry', name: 'values', values: [{ displayName: 'URL', name: 'url', type: 'string', required: true, default: '' }] }],
-					description: 'From 2 to 5 image URLs',
-				},
-				...commonWebhookFields,
-				{ displayName: 'Account Hash', name: 'account_hash', type: 'string', default: '', description: optionalAccountHashDescription },
-			]),
-			...withDisplay('prefer', [
-				{ displayName: 'Account Hash', name: 'account_hash', type: 'string', required: true, default: '', description: requiredAccountHashDescription },
-				{ displayName: 'Webhook URL', name: 'webhook_url', type: 'string', default: '' },
-				{ displayName: 'Callback ID', name: 'callback_id', type: 'string', default: '', description: 'Optional callback identifier (max 72 chars)' },
-				{ displayName: 'Is Async', name: 'is_async', type: 'boolean', default: false, description: 'Whether to return the task hash at once instead of waiting for the final result' },
-			]),
-			...withDisplay('speed', [
-				{ displayName: 'Account Hash', name: 'account_hash', type: 'string', required: true, default: '', description: requiredAccountHashDescription },
-				{
-					displayName: 'Choice',
-					name: 'choice',
-					type: 'options',
-					required: true,
-					default: 'relax',
-					options: [
-						{ name: 'Relax', value: 'relax' },
-						{ name: 'Fast', value: 'fast' },
-						{ name: 'Turbo', value: 'turbo' },
-					],
-					description: 'Speed mode',
-				},
-				{ displayName: 'Webhook URL', name: 'webhook_url', type: 'string', default: '' },
-				{ displayName: 'Callback ID', name: 'callback_id', type: 'string', default: '', description: 'Optional callback identifier (max 72 chars)' },
-				{ displayName: 'Is Async', name: 'is_async', type: 'boolean', default: false, description: 'Whether to return the task hash at once instead of waiting for the final result' },
-			]),
-			...withDisplay('upload', [
-				{
-					displayName: 'Image URL',
-					name: 'url',
-					type: 'string',
-					required: true,
-					default: '',
-				},
-				{ displayName: 'Account Hash', name: 'account_hash', type: 'string', default: '', description: optionalAccountHashDescription },
-			]),
-			...withDisplay('seed', [
-				uuidHashField,
-				{ displayName: 'Is Async', name: 'is_async', type: 'boolean', default: false, description: 'Whether to return the task hash at once instead of waiting for the final result' },
-				{ displayName: 'Webhook URL', name: 'webhook_url', type: 'string', default: '' },
-				{ displayName: 'Callback ID', name: 'callback_id', type: 'string', default: '', description: 'Optional callback identifier (max 72 chars)' },
-			]),
-			...withDisplay('status', [uuidHashField]),
+			{
+				displayName: 'Operation',
+				name: 'operation',
+				type: 'options',
+				noDataExpression: true,
+				default: 'imagine',
+				options: operationOptions,
+			},
+
+			// Required inputs.
+			{
+				displayName: 'Prompt',
+				name: 'prompt',
+				type: 'string',
+				required: true,
+				default: '',
+				description: 'Text prompt. Midjourney parameters such as --ar 3:2 go at the end.',
+				displayOptions: show(['imagine', 'imagineInstant', 'inpaint']),
+			},
+			{
+				displayName: 'Hash',
+				name: 'hash',
+				type: 'string',
+				required: true,
+				default: '',
+				description: 'Hash of the task to work with, returned when the task was created',
+				displayOptions: show(hashOperations),
+			},
+			{
+				displayName: 'Account Hash',
+				name: 'account_hash',
+				type: 'string',
+				required: true,
+				default: '',
+				description: 'Discord account hash from your UserAPI dashboard',
+				displayOptions: show(['info', 'prefer', 'speed']),
+			},
+			{
+				displayName: 'Image URL',
+				name: 'url',
+				type: 'string',
+				required: true,
+				default: '',
+				description: 'Public http or https link to the image',
+				displayOptions: show(['describe', 'upload']),
+			},
+			{
+				displayName: 'Choice',
+				name: 'choice',
+				type: 'options',
+				required: true,
+				default: 'nothing',
+				description: 'Which result to return after the grid is ready',
+				options: [
+					{ name: '1', value: '1' },
+					{ name: '2', value: '2' },
+					{ name: '3', value: '3' },
+					{ name: '4', value: '4' },
+					{ name: 'All (Seed)', value: 'all' },
+					{ name: 'Nothing', value: 'nothing' },
+					{ name: 'Random', value: 'random' },
+				],
+				displayOptions: show(['imagineInstant']),
+			},
+			{
+				displayName: 'Choice',
+				name: 'choice',
+				type: 'options',
+				required: true,
+				default: 1,
+				description: 'Image of the grid, counted from the top left',
+				options: choiceOneToFour,
+				displayOptions: show(['upscale', 'variation']),
+			},
+			{
+				displayName: 'Direction',
+				name: 'choice',
+				type: 'options',
+				required: true,
+				default: 'right',
+				options: [
+					{ name: 'Down', value: 'down' },
+					{ name: 'Left', value: 'left' },
+					{ name: 'Right', value: 'right' },
+					{ name: 'Up', value: 'up' },
+				],
+				displayOptions: show(['pan']),
+			},
+			{
+				displayName: 'Upscaler',
+				name: 'choice',
+				type: 'options',
+				required: true,
+				default: 'v6_2x_subtle',
+				options: [
+					{ name: 'V5 2x', value: 'v5_2x' },
+					{ name: 'V5 4x', value: 'v5_4x' },
+					{ name: 'V6 2x Creative', value: 'v6_2x_creative' },
+					{ name: 'V6 2x Subtle', value: 'v6_2x_subtle' },
+					{ name: 'V6r1 2x Creative', value: 'v6r1_2x_creative' },
+					{ name: 'V6r1 2x Subtle', value: 'v6r1_2x_subtle' },
+					{ name: 'V7 2x Creative', value: 'v7_2x_creative' },
+					{ name: 'V7 2x Subtle', value: 'v7_2x_subtle' },
+				],
+				displayOptions: show(['upsample']),
+			},
+			{
+				displayName: 'Motion',
+				name: 'choice',
+				type: 'options',
+				required: true,
+				default: 'high',
+				options: [
+					{ name: 'High', value: 'high' },
+					{ name: 'Low', value: 'low' },
+				],
+				displayOptions: show(['animate']),
+			},
+			{
+				displayName: 'Mask (Base64)',
+				name: 'mask',
+				type: 'string',
+				required: true,
+				default: '',
+				description: 'Region to redraw, as a Base64-encoded image',
+				displayOptions: show(['inpaint']),
+			},
+			{
+				displayName: 'Zoom Mode',
+				name: 'zoom_mode',
+				type: 'options',
+				default: 'choice',
+				options: [
+					{ name: 'By Choice', value: 'choice' },
+					{ name: 'By Prompt', value: 'prompt' },
+				],
+				displayOptions: show(['zoom']),
+			},
+			{
+				displayName: 'Zoom',
+				name: 'choice',
+				type: 'options',
+				required: true,
+				default: 50,
+				options: [
+					{ name: '50', value: 50 },
+					{ name: '75', value: 75 },
+				],
+				displayOptions: show(['zoom'], { zoom_mode: ['choice'] }),
+			},
+			{
+				displayName: 'Zoom Prompt',
+				name: 'prompt',
+				type: 'string',
+				required: true,
+				default: '',
+				description: 'Custom zoom, for example "--zoom 1.8" with an optional new prompt',
+				displayOptions: show(['zoom'], { zoom_mode: ['prompt'] }),
+			},
+			{
+				displayName: 'Image URLs',
+				name: 'urls',
+				type: 'fixedCollection',
+				typeOptions: { multipleValues: true },
+				default: { values: [{ url: '' }, { url: '' }] },
+				description: 'From 2 to 5 image URLs',
+				options: [
+					{
+						displayName: 'Image',
+						name: 'values',
+						values: [{ displayName: 'URL', name: 'url', type: 'string', required: true, default: '' }],
+					},
+				],
+				displayOptions: show(['blend']),
+			},
+			{
+				displayName: 'Speed',
+				name: 'choice',
+				type: 'options',
+				required: true,
+				default: 'relax',
+				options: [
+					{ name: 'Fast', value: 'fast' },
+					{ name: 'Relax', value: 'relax' },
+					{ name: 'Turbo', value: 'turbo' },
+				],
+				displayOptions: show(['speed']),
+			},
+
+			// Optional inputs, one collection per group of operations with the same fields.
+			additionalFields(['imagine'], [...webhook, callbackIdField, accountHashField, prefilterField]),
+			additionalFields(['imagineInstant', 'upload'], [accountHashField]),
+			additionalFields(['describe', 'blend'], [...webhook, accountHashField]),
+			additionalFields(['info'], [webhookUrlField, callbackIdField]),
+			additionalFields(['prefer', 'speed', 'seed'], [webhookUrlField, callbackIdField, isAsyncField]),
+			additionalFields(['upscale', 'upsample', 'animate', 'inpaint', 'zoom'], webhook),
+			additionalFields(['pan', 'variation', 'varySubtle', 'varyStrong', 'reroll'], [remixPromptField, ...webhook]),
 		],
 	};
 
@@ -242,224 +370,129 @@ export class UserApi implements INodeType {
 		for (let i = 0; i < items.length; i++) {
 			try {
 				const operation = this.getNodeParameter('operation', i) as string;
-				const requestOptions: IHttpRequestOptions = { method: 'GET', url: '/', json: true };
+				const path = operationPaths[operation];
+				if (!path) {
+					throw new NodeOperationError(this.getNode(), `Unsupported operation: ${operation}`, { itemIndex: i });
+				}
+				const param = (name: string) => this.getNodeParameter(name, i);
+				const fail = (message: string) => new NodeOperationError(this.getNode(), message, { itemIndex: i });
+
 				let body: IDataObject = {};
-				let query: IDataObject = {};
+				let qs: IDataObject = {};
+
+				if (hashOperations.includes(operation)) {
+					const hash = (param('hash') as string).trim();
+					if (!isUuid(hash)) throw fail('Hash must be a valid UUID');
+					if (operation === 'status') qs = { hash };
+					else body.hash = hash;
+				}
 
 				switch (operation) {
 					case 'imagine':
-						requestOptions.method = 'POST'; requestOptions.url = '/midjourney/v2/imagine';
-						body = { prompt: this.getNodeParameter('prompt', i) as string, is_disable_prefilter: this.getNodeParameter('is_disable_prefilter', i) as boolean };
-						addWebhookFields(this, i, body);
-						addOptionalString(body, 'callback_id', this.getNodeParameter('callback_id', i) as string);
-						addOptionalString(body, 'account_hash', this.getNodeParameter('account_hash', i) as string);
+						body.prompt = param('prompt');
 						break;
 					case 'imagineInstant':
-						requestOptions.method = 'POST'; requestOptions.url = '/midjourney/v2/imagine-instant';
-						body = { prompt: this.getNodeParameter('prompt', i) as string, choice: this.getNodeParameter('choice', i) as string };
-						addOptionalString(body, 'account_hash', this.getNodeParameter('account_hash', i) as string);
+						body.prompt = param('prompt');
+						body.choice = param('choice');
 						break;
 					case 'describe':
-						requestOptions.method = 'POST'; requestOptions.url = '/midjourney/v2/describe';
-						body = { url: this.getNodeParameter('url', i) as string };
-						if (!isValidHttpUrl(body.url as string)) {
-							throw new NodeApiError(this.getNode(), { message: 'URL must be a valid http/https image URL' });
-						}
-						addWebhookFields(this, i, body);
-						addOptionalString(body, 'account_hash', this.getNodeParameter('account_hash', i) as string);
+					case 'upload': {
+						const url = param('url') as string;
+						if (!isValidHttpUrl(url)) throw fail('Image URL must be a valid http or https URL');
+						body.url = url;
 						break;
+					}
 					case 'info':
-						requestOptions.method = 'POST'; requestOptions.url = '/midjourney/v2/info';
-						body = { account_hash: this.getNodeParameter('account_hash', i) as string };
-						{
-							const webhookUrl = this.getNodeParameter('webhook_url', i) as string;
-							if (webhookUrl !== '') {
-								if (!isValidHttpUrl(webhookUrl)) {
-									throw new NodeApiError(this.getNode(), { message: 'Webhook URL must be a valid http/https URL' });
-								}
-								body.webhook_url = webhookUrl;
-							}
-						}
-						addOptionalString(body, 'callback_id', this.getNodeParameter('callback_id', i) as string);
+						body.account_hash = param('account_hash');
 						break;
-					case 'upscale':
-						requestOptions.method = 'POST'; requestOptions.url = '/midjourney/v2/upscale';
-						body = { hash: this.getNodeParameter('hash', i) as string, choice: this.getNodeParameter('choice', i) as number };
-						if (!isUuidV4Like(body.hash as string)) throw new NodeApiError(this.getNode(), { message: 'Hash must be a valid UUID' });
-						addWebhookFields(this, i, body);
-						break;
-					case 'pan':
-						requestOptions.method = 'POST'; requestOptions.url = '/midjourney/v2/pan';
-						body = { hash: this.getNodeParameter('hash', i) as string, choice: this.getNodeParameter('choice', i) as string };
-						if (!isUuidV4Like(body.hash as string)) throw new NodeApiError(this.getNode(), { message: 'Hash must be a valid UUID' });
-						addOptionalString(body, 'prompt', this.getNodeParameter('prompt', i) as string);
-						addWebhookFields(this, i, body);
-						break;
-					case 'variation':
-						requestOptions.method = 'POST'; requestOptions.url = '/midjourney/v2/variation';
-						body = { hash: this.getNodeParameter('hash', i) as string, choice: this.getNodeParameter('choice', i) as number };
-						if (!isUuidV4Like(body.hash as string)) throw new NodeApiError(this.getNode(), { message: 'Hash must be a valid UUID' });
-						addOptionalString(body, 'prompt', this.getNodeParameter('prompt', i) as string);
-						addWebhookFields(this, i, body);
-						break;
-					case 'varySubtle':
-						requestOptions.method = 'POST'; requestOptions.url = '/midjourney/v2/vary-subtle'; body = { hash: this.getNodeParameter('hash', i) as string };
-						if (!isUuidV4Like(body.hash as string)) throw new NodeApiError(this.getNode(), { message: 'Hash must be a valid UUID' });
-						addOptionalString(body, 'prompt', this.getNodeParameter('prompt', i) as string);
-						addWebhookFields(this, i, body);
-						break;
-					case 'varyStrong':
-						requestOptions.method = 'POST'; requestOptions.url = '/midjourney/v2/vary-strong'; body = { hash: this.getNodeParameter('hash', i) as string };
-						if (!isUuidV4Like(body.hash as string)) throw new NodeApiError(this.getNode(), { message: 'Hash must be a valid UUID' });
-						addOptionalString(body, 'prompt', this.getNodeParameter('prompt', i) as string);
-						addWebhookFields(this, i, body);
-						break;
-					case 'reroll':
-						requestOptions.method = 'POST'; requestOptions.url = '/midjourney/v2/reroll'; body = { hash: this.getNodeParameter('hash', i) as string };
-						if (!isUuidV4Like(body.hash as string)) throw new NodeApiError(this.getNode(), { message: 'Hash must be a valid UUID' });
-						addOptionalString(body, 'prompt', this.getNodeParameter('prompt', i) as string);
-						addWebhookFields(this, i, body);
-						break;
-					case 'upsample':
-						requestOptions.method = 'POST'; requestOptions.url = '/midjourney/v2/upsample';
-						body = { hash: this.getNodeParameter('hash', i) as string, choice: this.getNodeParameter('choice', i) as string };
-						if (!isUuidV4Like(body.hash as string)) throw new NodeApiError(this.getNode(), { message: 'Hash must be a valid UUID' });
-						addWebhookFields(this, i, body);
-						break;
-					case 'animate':
-						requestOptions.method = 'POST'; requestOptions.url = '/midjourney/v2/animate';
-						body = { hash: this.getNodeParameter('hash', i) as string, choice: this.getNodeParameter('choice', i) as string };
-						if (!isUuidV4Like(body.hash as string)) throw new NodeApiError(this.getNode(), { message: 'Hash must be a valid UUID' });
-						addWebhookFields(this, i, body);
-						break;
-					case 'inpaint':
-						requestOptions.method = 'POST'; requestOptions.url = '/midjourney/v2/inpaint';
-						body = { hash: this.getNodeParameter('hash', i) as string, mask: this.getNodeParameter('mask', i) as string, prompt: this.getNodeParameter('prompt', i) as string };
-						if (!isUuidV4Like(body.hash as string)) throw new NodeApiError(this.getNode(), { message: 'Hash must be a valid UUID' });
-						addWebhookFields(this, i, body);
-						break;
-					case 'zoom': {
-						requestOptions.method = 'POST'; requestOptions.url = '/midjourney/v2/zoom'; body = { hash: this.getNodeParameter('hash', i) as string };
-						if (!isUuidV4Like(body.hash as string)) throw new NodeApiError(this.getNode(), { message: 'Hash must be a valid UUID' });
-						const mode = this.getNodeParameter('zoom_mode', i) as string;
-						if (mode === 'choice') body.choice = this.getNodeParameter('choice', i) as number; else body.prompt = this.getNodeParameter('prompt', i) as string;
-						addWebhookFields(this, i, body);
-						break;
-					}
-					case 'blend': {
-						requestOptions.method = 'POST'; requestOptions.url = '/midjourney/v2/blend';
-						const urlsRaw = this.getNodeParameter('urls.values', i, []) as Array<{ url: string }>;
-						if (urlsRaw.length < 2 || urlsRaw.length > 5) throw new NodeApiError(this.getNode(), { message: 'Blend requires 2 to 5 URLs' });
-						for (const entry of urlsRaw) {
-							if (!isValidHttpUrl(entry.url)) {
-								throw new NodeApiError(this.getNode(), { message: 'Each Blend URL must be a valid http/https URL' });
-							}
-						}
-						body = { urls: urlsRaw.map((u) => ({ url: u.url })) };
-						addWebhookFields(this, i, body);
-						addOptionalString(body, 'account_hash', this.getNodeParameter('account_hash', i) as string);
-						break;
-					}
 					case 'prefer':
-						requestOptions.method = 'POST'; requestOptions.url = '/midjourney/v2/prefer';
-						body = { account_hash: this.getNodeParameter('account_hash', i) as string, choice: 'remix', is_async: this.getNodeParameter('is_async', i) as boolean };
-						{
-							const webhookUrl = this.getNodeParameter('webhook_url', i) as string;
-							if (webhookUrl !== '') {
-								if (!isValidHttpUrl(webhookUrl)) {
-									throw new NodeApiError(this.getNode(), { message: 'Webhook URL must be a valid http/https URL' });
-								}
-								body.webhook_url = webhookUrl;
-							}
-						}
-						addOptionalString(body, 'callback_id', this.getNodeParameter('callback_id', i) as string);
+						body.account_hash = param('account_hash');
+						body.choice = 'remix';
+						body.is_async = false;
 						break;
 					case 'speed':
-						requestOptions.method = 'POST'; requestOptions.url = '/midjourney/v2/speed';
-						body = {
-							account_hash: this.getNodeParameter('account_hash', i) as string,
-							choice: this.getNodeParameter('choice', i) as string,
-							is_async: this.getNodeParameter('is_async', i) as boolean,
-						};
-						{
-							const webhookUrl = this.getNodeParameter('webhook_url', i) as string;
-							if (webhookUrl !== '') {
-								if (!isValidHttpUrl(webhookUrl)) {
-									throw new NodeApiError(this.getNode(), { message: 'Webhook URL must be a valid http/https URL' });
-								}
-								body.webhook_url = webhookUrl;
-							}
-						}
-						addOptionalString(body, 'callback_id', this.getNodeParameter('callback_id', i) as string);
-						break;
-					case 'upload':
-						requestOptions.method = 'POST'; requestOptions.url = '/midjourney/v2/upload';
-						{
-							const url = this.getNodeParameter('url', i) as string;
-							if (!isValidHttpUrl(url)) {
-								throw new NodeApiError(this.getNode(), { message: 'Image URL must be a valid http/https URL' });
-							}
-							body = { url };
-							addOptionalString(body, 'account_hash', this.getNodeParameter('account_hash', i) as string);
-						}
+						body.account_hash = param('account_hash');
+						body.choice = param('choice');
+						body.is_async = false;
 						break;
 					case 'seed':
-						requestOptions.method = 'POST'; requestOptions.url = '/midjourney/v2/seed';
-						body = { hash: this.getNodeParameter('hash', i) as string, is_async: this.getNodeParameter('is_async', i) as boolean };
-						if (!isUuidV4Like(body.hash as string)) throw new NodeApiError(this.getNode(), { message: 'Hash must be a valid UUID' });
-						{
-							const webhookUrl = this.getNodeParameter('webhook_url', i) as string;
-							if (webhookUrl !== '') {
-								if (!isValidHttpUrl(webhookUrl)) {
-									throw new NodeApiError(this.getNode(), { message: 'Webhook URL must be a valid http/https URL' });
-								}
-								body.webhook_url = webhookUrl;
-							}
-						}
+						body.is_async = false;
 						break;
-					case 'status':
-						requestOptions.method = 'GET'; requestOptions.url = '/midjourney/v2/status'; query = { hash: this.getNodeParameter('hash', i) as string };
-						if (!isUuidV4Like(query.hash as string)) throw new NodeApiError(this.getNode(), { message: 'Hash must be a valid UUID' });
+					case 'upscale':
+					case 'variation':
+					case 'pan':
+					case 'upsample':
+					case 'animate':
+						body.choice = param('choice');
 						break;
-					default:
-						throw new NodeApiError(this.getNode(), { message: `Unsupported operation: ${operation}` });
+					case 'inpaint':
+						body.mask = param('mask');
+						body.prompt = param('prompt');
+						break;
+					case 'zoom':
+						if (param('zoom_mode') === 'choice') body.choice = param('choice');
+						else body.prompt = param('prompt');
+						break;
+					case 'blend': {
+						const urls = this.getNodeParameter('urls.values', i, []) as Array<{ url: string }>;
+						if (urls.length < 2 || urls.length > 5) throw fail('Blend needs 2 to 5 image URLs');
+						if (urls.some((u) => !isValidHttpUrl(u.url))) throw fail('Each image URL must be a valid http or https URL');
+						body.urls = urls.map((u) => ({ url: u.url }));
+						break;
+					}
 				}
 
-				if (requestOptions.json !== false) {
-					requestOptions.headers = { ...(requestOptions.headers ?? {}), 'Content-Type': 'application/json' };
+				if (operation !== 'status') {
+					body = { ...body, ...optionalFields(this.getNodeParameter('additionalFields', i, {}) as IDataObject, fail) };
 				}
-				if (typeof requestOptions.url === 'string' && requestOptions.url.startsWith('/')) {
-					requestOptions.url = `${API_BASE_URL}${requestOptions.url}`;
+
+				const method: IHttpRequestMethods = operation === 'status' ? 'GET' : 'POST';
+				const options: IHttpRequestOptions = { method, url: `${API_BASE_URL}${path}`, json: true };
+				if (method === 'POST') options.body = body;
+				if (Object.keys(qs).length > 0) options.qs = qs;
+
+				let response: unknown;
+				try {
+					response = await this.helpers.httpRequestWithAuthentication.call(this, 'userApi', options);
+				} catch (error) {
+					throw new NodeApiError(this.getNode(), error as JsonObject, { itemIndex: i });
 				}
-				if (Object.keys(body).length > 0) requestOptions.body = body;
-				if (Object.keys(query).length > 0) requestOptions.qs = query;
-				const response = await this.helpers.httpRequestWithAuthentication.call(this, 'userApi', requestOptions);
-				const json: IDataObject = typeof response === 'object' && response !== null ? (response as IDataObject) : { value: response as string | number | boolean | null };
+				const json: IDataObject =
+					typeof response === 'object' && response !== null
+						? (response as IDataObject)
+						: { value: response as string | number | boolean | null };
 				returnData.push({ json, pairedItem: { item: i } });
 			} catch (error) {
 				if (this.continueOnFail()) {
 					returnData.push({ json: { error: (error as Error).message }, pairedItem: { item: i } });
 					continue;
 				}
-				throw error;
+				// Both constructors return the error unchanged when it is already of their type.
+				if (error instanceof NodeApiError) throw new NodeApiError(this.getNode(), error as unknown as JsonObject);
+				throw new NodeOperationError(this.getNode(), error as Error, { itemIndex: i });
 			}
 		}
 		return [returnData];
 	}
 }
 
-function addOptionalString(target: IDataObject, key: string, value: string): void {
-	if (value !== '') target[key] = value;
-}
-
-function addWebhookFields(context: IExecuteFunctions, itemIndex: number, target: IDataObject): void {
-	const webhookUrl = context.getNodeParameter('webhook_url', itemIndex) as string;
-	if (webhookUrl === '') return;
-	if (!isValidHttpUrl(webhookUrl)) {
-		throw new NodeApiError(context.getNode(), { message: 'Webhook URL must be a valid http/https URL' });
+// Copies the filled optional fields into the request body. The webhook type is sent only with a webhook URL.
+function optionalFields(fields: IDataObject, fail: (message: string) => Error): IDataObject {
+	const out: IDataObject = {};
+	for (const key of ['account_hash', 'callback_id', 'prompt']) {
+		const value = typeof fields[key] === 'string' ? (fields[key] as string).trim() : '';
+		if (value !== '') out[key] = value;
 	}
-	target.webhook_url = webhookUrl;
-	target.webhook_type = context.getNodeParameter('webhook_type', itemIndex) as string;
+	for (const key of ['is_async', 'is_disable_prefilter']) {
+		if (typeof fields[key] === 'boolean') out[key] = fields[key];
+	}
+	const webhookUrl = typeof fields.webhook_url === 'string' ? fields.webhook_url.trim() : '';
+	if (webhookUrl !== '') {
+		if (!isValidHttpUrl(webhookUrl)) throw fail('Webhook URL must be a valid http or https URL');
+		out.webhook_url = webhookUrl;
+		if (fields.webhook_type) out.webhook_type = fields.webhook_type;
+	}
+	return out;
 }
 
 function isValidHttpUrl(value: string): boolean {
@@ -471,6 +504,6 @@ function isValidHttpUrl(value: string): boolean {
 	}
 }
 
-function isUuidV4Like(value: string): boolean {
+function isUuid(value: string): boolean {
 	return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
