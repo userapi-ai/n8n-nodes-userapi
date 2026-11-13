@@ -39,7 +39,7 @@ Follow the [installation guide](https://docs.n8n.io/integrations/community-nodes
 
 Follow the [First steps guide to get your API key](https://userapi.ai/first-steps).
 
-Create `UserAPI` credentials in n8n and set:
+Create `UserAPI API` credentials in n8n and set:
 
 - `API Key`: your UserAPI key
 
@@ -54,7 +54,11 @@ Basic generation flow:
 
 1. `UserAPI` -> `Imagine` (provide prompt)
 2. `UserAPI` -> `Status` (poll using returned hash)  
-   or set `webhook_url` in `Imagine` and receive callbacks in an n8n `Webhook` node (or your own webhook endpoint)
+   or open **Additional Fields → Webhook URL** in `Imagine` and receive callbacks in an n8n `Webhook` node (or your own webhook endpoint)
+
+Ready-to-import example workflows (generate and upscale, Telegram bot, bulk generation from Google Sheets): https://gist.github.com/nikoole/c284f7cbe7499a2ac9ac954904c399bb
+
+Optional settings such as `Webhook URL`, `Account Hash` and `Callback ID` are under **Additional Fields** in each operation.
 
 ## Compatibility
 

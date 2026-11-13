@@ -14,26 +14,26 @@ import { NodeApiError, NodeConnectionTypes, NodeOperationError } from 'n8n-workf
 const API_BASE_URL = 'https://api.userapi.ai';
 
 const operationOptions = [
-	{ name: 'Animate', value: 'animate', description: 'Turn an image into a short video', action: 'Animate an image' },
+	{ name: 'Animate', value: 'animate', description: 'Turn an image into a short video', action: 'Animate image' },
 	{ name: 'Blend', value: 'blend', description: 'Blend 2 to 5 images into one', action: 'Blend images' },
-	{ name: 'Describe', value: 'describe', description: 'Get prompt suggestions that describe an image', action: 'Describe an image' },
-	{ name: 'Imagine', value: 'imagine', description: 'Generate four images from a text prompt', action: 'Generate images from a prompt' },
-	{ name: 'Imagine Instant', value: 'imagineInstant', description: 'Generate images from a prompt and pick the result in one call', action: 'Generate and pick an image' },
+	{ name: 'Describe', value: 'describe', description: 'Get prompt suggestions that describe an image', action: 'Describe image' },
+	{ name: 'Imagine', value: 'imagine', description: 'Generate four images from a text prompt', action: 'Generate images from prompt' },
+	{ name: 'Imagine Instant', value: 'imagineInstant', description: 'Generate images from a prompt and pick the result in one call', action: 'Generate and pick image' },
 	{ name: 'Info', value: 'info', description: 'Get the subscription and usage details of a Midjourney account', action: 'Get account info' },
-	{ name: 'Inpaint', value: 'inpaint', description: 'Redraw a masked region of an image', action: 'Inpaint an image' },
-	{ name: 'Pan', value: 'pan', description: 'Extend an image in one direction', action: 'Pan an image' },
-	{ name: 'Reroll', value: 'reroll', description: 'Run the same prompt again', action: 'Reroll a prompt' },
-	{ name: 'Seed', value: 'seed', description: 'Get the seed of a generation', action: 'Get the seed of a generation' },
+	{ name: 'Inpaint', value: 'inpaint', description: 'Redraw a masked region of an image', action: 'Inpaint image' },
+	{ name: 'Pan', value: 'pan', description: 'Extend an image in one direction', action: 'Pan image' },
+	{ name: 'Reroll', value: 'reroll', description: 'Run the same prompt again', action: 'Reroll prompt' },
+	{ name: 'Seed', value: 'seed', description: 'Get the seed of a generation', action: 'Get generation seed' },
 	{ name: 'Speed', value: 'speed', description: 'Switch an account between Relax, Fast and Turbo modes', action: 'Set account speed' },
 	{ name: 'Status', value: 'status', description: 'Get the status and result of a task', action: 'Get task status' },
 	{ name: 'Toggle Remix Mode', value: 'prefer', description: 'Turn Remix mode on or off for an account', action: 'Toggle remix mode' },
-	{ name: 'Upload', value: 'upload', description: 'Upload an image to get a Midjourney link for it', action: 'Upload an image' },
-	{ name: 'Upsample', value: 'upsample', description: 'Upscale an image with a chosen upscaler', action: 'Upsample an image' },
-	{ name: 'Upscale', value: 'upscale', description: 'Upscale one image from a grid', action: 'Upscale an image' },
-	{ name: 'Variation', value: 'variation', description: 'Create variations of one image from a grid', action: 'Create variations' },
-	{ name: 'Vary Strong', value: 'varyStrong', description: 'Create strong variations of an upscaled image', action: 'Create strong variations' },
-	{ name: 'Vary Subtle', value: 'varySubtle', description: 'Create subtle variations of an upscaled image', action: 'Create subtle variations' },
-	{ name: 'Zoom', value: 'zoom', description: 'Zoom out of an image', action: 'Zoom out of an image' },
+	{ name: 'Upload', value: 'upload', description: 'Upload an image to get a Midjourney link for it', action: 'Upload image' },
+	{ name: 'Upsample', value: 'upsample', description: 'Upscale an image with a chosen upscaler', action: 'Upsample image' },
+	{ name: 'Upscale', value: 'upscale', description: 'Upscale one image from a grid', action: 'Upscale image' },
+	{ name: 'Variation', value: 'variation', description: 'Create variations of one image from a grid', action: 'Create image variations' },
+	{ name: 'Vary Strong', value: 'varyStrong', description: 'Create strong variations of an upscaled image', action: 'Create strong image variations' },
+	{ name: 'Vary Subtle', value: 'varySubtle', description: 'Create subtle variations of an upscaled image', action: 'Create subtle image variations' },
+	{ name: 'Zoom', value: 'zoom', description: 'Zoom out of an image', action: 'Zoom out image' },
 ];
 
 // Request path of each operation. Every operation is a POST except Status.
@@ -120,6 +120,7 @@ const webhookUrlField: INodeProperties = {
 	name: 'webhook_url',
 	type: 'string',
 	default: '',
+	placeholder: 'e.g. https://example.com/webhook',
 	description: 'URL that receives the task result as a POST request',
 };
 
@@ -179,6 +180,7 @@ export class UserApi implements INodeType {
 				type: 'string',
 				required: true,
 				default: '',
+				placeholder: 'e.g. a red fox in a snowy forest, cinematic light --ar 3:2',
 				description: 'Text prompt. Midjourney parameters such as --ar 3:2 go at the end.',
 				displayOptions: show(['imagine', 'imagineInstant', 'inpaint']),
 			},
@@ -188,6 +190,7 @@ export class UserApi implements INodeType {
 				type: 'string',
 				required: true,
 				default: '',
+				placeholder: 'e.g. 2b9f1c4e-7d3a-4f6b-9c1d-5e8a7b6c4d3f',
 				description: 'Hash of the task to work with, returned when the task was created',
 				displayOptions: show(hashOperations),
 			},
@@ -206,6 +209,7 @@ export class UserApi implements INodeType {
 				type: 'string',
 				required: true,
 				default: '',
+				placeholder: 'e.g. https://example.com/image.png',
 				description: 'Public http or https link to the image',
 				displayOptions: show(['describe', 'upload']),
 			},
@@ -375,14 +379,15 @@ export class UserApi implements INodeType {
 					throw new NodeOperationError(this.getNode(), `Unsupported operation: ${operation}`, { itemIndex: i });
 				}
 				const param = (name: string) => this.getNodeParameter(name, i);
-				const fail = (message: string) => new NodeOperationError(this.getNode(), message, { itemIndex: i });
+				const fail = (message: string, description?: string) =>
+					new NodeOperationError(this.getNode(), message, { itemIndex: i, description });
 
 				let body: IDataObject = {};
 				let qs: IDataObject = {};
 
 				if (hashOperations.includes(operation)) {
-					const hash = (param('hash') as string).trim();
-					if (!isUuid(hash)) throw fail('Hash must be a valid UUID');
+					const hash = String(param('hash') ?? '').trim();
+					if (!isUuid(hash)) throw fail("'Hash' must be a valid UUID", "Use the 'hash' returned by the operation that created the task");
 					if (operation === 'status') qs = { hash };
 					else body.hash = hash;
 				}
@@ -397,8 +402,8 @@ export class UserApi implements INodeType {
 						break;
 					case 'describe':
 					case 'upload': {
-						const url = param('url') as string;
-						if (!isValidHttpUrl(url)) throw fail('Image URL must be a valid http or https URL');
+						const url = String(param('url') ?? '').trim();
+						if (!isValidHttpUrl(url)) throw fail("'Image URL' must be a valid http or https URL", 'Use a public link to the image, for example https://example.com/image.png');
 						body.url = url;
 						break;
 					}
@@ -435,8 +440,8 @@ export class UserApi implements INodeType {
 						break;
 					case 'blend': {
 						const urls = this.getNodeParameter('urls.values', i, []) as Array<{ url: string }>;
-						if (urls.length < 2 || urls.length > 5) throw fail('Blend needs 2 to 5 image URLs');
-						if (urls.some((u) => !isValidHttpUrl(u.url))) throw fail('Each image URL must be a valid http or https URL');
+						if (urls.length < 2 || urls.length > 5) throw fail("'Image URLs' must contain 2 to 5 images", "Add or remove entries in 'Image URLs'");
+						if (urls.some((u) => !isValidHttpUrl(u.url))) throw fail("Each entry in 'Image URLs' must be a valid http or https URL", 'Use public links to the images, for example https://example.com/image.png');
 						body.urls = urls.map((u) => ({ url: u.url }));
 						break;
 					}
@@ -455,7 +460,9 @@ export class UserApi implements INodeType {
 				try {
 					response = await this.helpers.httpRequestWithAuthentication.call(this, 'userApi', options);
 				} catch (error) {
-					throw new NodeApiError(this.getNode(), error as JsonObject, { itemIndex: i });
+					// Show the API's own reason ("not enough balance", "banned prompt") instead of a generic HTTP text.
+					const reason = apiErrorReason(error);
+					throw new NodeApiError(this.getNode(), error as JsonObject, reason ? { itemIndex: i, message: reason } : { itemIndex: i });
 				}
 				const json: IDataObject =
 					typeof response === 'object' && response !== null
@@ -477,7 +484,7 @@ export class UserApi implements INodeType {
 }
 
 // Copies the filled optional fields into the request body. The webhook type is sent only with a webhook URL.
-function optionalFields(fields: IDataObject, fail: (message: string) => Error): IDataObject {
+function optionalFields(fields: IDataObject, fail: (message: string, description?: string) => Error): IDataObject {
 	const out: IDataObject = {};
 	for (const key of ['account_hash', 'callback_id', 'prompt']) {
 		const value = typeof fields[key] === 'string' ? (fields[key] as string).trim() : '';
@@ -488,11 +495,22 @@ function optionalFields(fields: IDataObject, fail: (message: string) => Error): 
 	}
 	const webhookUrl = typeof fields.webhook_url === 'string' ? fields.webhook_url.trim() : '';
 	if (webhookUrl !== '') {
-		if (!isValidHttpUrl(webhookUrl)) throw fail('Webhook URL must be a valid http or https URL');
+		if (!isValidHttpUrl(webhookUrl)) throw fail("'Webhook URL' must be a valid http or https URL", "Fix 'Webhook URL' in 'Additional Fields' or remove it");
 		out.webhook_url = webhookUrl;
 		if (fields.webhook_type) out.webhook_type = fields.webhook_type;
 	}
 	return out;
+}
+
+// The UserAPI error body is {"error": "..."}; returns that text when present.
+function apiErrorReason(error: unknown): string | undefined {
+	const data = (error as { response?: { data?: unknown; body?: unknown } })?.response;
+	const body = data?.data ?? data?.body;
+	if (body && typeof body === 'object') {
+		const reason = (body as IDataObject).error ?? (body as IDataObject).message;
+		if (typeof reason === 'string' && reason.trim() !== '') return reason.trim();
+	}
+	return undefined;
 }
 
 function isValidHttpUrl(value: string): boolean {
