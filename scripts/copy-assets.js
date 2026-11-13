@@ -8,6 +8,8 @@ const assets = [
 	['nodes/UserApi/userapi.svg', 'dist/nodes/UserApi/userapi.svg'],
 	['nodes/UserApi/UserApi.node.json', 'dist/nodes/UserApi/UserApi.node.json'],
 	['credentials/userapi.svg', 'dist/credentials/userapi.svg'],
+	['nodes/UserApi/userapi.dark.svg', 'dist/nodes/UserApi/userapi.dark.svg'],
+	['credentials/userapi.dark.svg', 'dist/credentials/userapi.dark.svg'],
 ];
 
 for (const [from, to] of assets) {

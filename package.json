@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-userapi",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "n8n community nodes for UserApi.Ai endpoints",
   "license": "MIT",
   "homepage": "https://userapi.ai",
@@ -26,13 +26,15 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/copy-assets.js",
     "dev": "tsc -w -p tsconfig.json",
-    "lint": "echo \"Add ESLint config if needed\""
+    "lint": "n8n-node lint"
   },
   "peerDependencies": {
     "n8n-workflow": "*"
   },
   "devDependencies": {
+    "@n8n/node-cli": "^0.56.3",
     "@types/node": "^22.13.4",
+    "eslint": "^9.29.0",
     "n8n-workflow": "^1.120.9",
     "typescript": "^5.7.3"
   },

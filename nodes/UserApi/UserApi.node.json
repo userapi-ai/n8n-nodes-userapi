@@ -2,17 +2,26 @@
 	"node": "n8n-nodes-userapi.userApi",
 	"nodeVersion": "1.0",
 	"codexVersion": "1.0",
-	"categories": ["AI", "Marketing"],
-	"subcategories": {
-		"AI": ["Image Generation"]
-	},
+	"categories": [
+		"Marketing & Content",
+		"Development"
+	],
 	"resources": {
 		"credentialDocumentation": [
-			{ "url": "https://userapi.ai/first-steps" }
+			{
+				"url": "https://userapi.ai/first-steps"
+			}
 		],
 		"primaryDocumentation": [
-			{ "url": "https://userapi.ai/docs" }
+			{
+				"url": "https://userapi.ai/docs"
+			}
 		]
 	},
-	"alias": ["Midjourney", "Image", "Text to Image", "Video"]
+	"alias": [
+		"Midjourney",
+		"Image",
+		"Text to Image",
+		"Video"
+	]
 }
