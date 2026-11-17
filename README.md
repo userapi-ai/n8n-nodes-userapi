@@ -25,15 +25,13 @@ Official resources:
 
 ## Installation
 
-Follow the [installation guide](https://docs.n8n.io/integrations/community-nodes/installation/) in the n8n community nodes documentation.
+This node is **verified by n8n**, so it can be installed on n8n Cloud and on self-hosted n8n:
 
-## Quick Install
+1. On the canvas, open the nodes panel (**+** or **N**).
+2. Search for **UserAPI**. It is listed under **More from the community**.
+3. Open it and select **Install** (instance owner or admin).
 
-```text
-# In n8n
-# Go to Settings > Community Nodes
-# Install: n8n-nodes-userapi
-```
+On self-hosted n8n you can also install it in **Settings → Community Nodes** with the package name `n8n-nodes-userapi`. See the [n8n guide to verified community nodes](https://docs.n8n.io/integrations/community-nodes/installation/verified-install/).
 
 ## Credentials
 
